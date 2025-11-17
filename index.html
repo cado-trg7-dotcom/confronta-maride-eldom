@@ -2,7 +2,16 @@
 
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
+ <!-- Permette alla pagina di comportarsi come una app -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="NomeApp">
+
+<!-- Icona app (iPhone) -->
+<link rel="apple-touch-icon" href="icon.png">
+
+
+<meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Confronto Elettrodomestici</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -381,12 +390,18 @@
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
             const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1, defval: ''});
             
+            // Filtra le righe completamente vuote
+            const filteredData = jsonData.filter((row, index) => {
+                if (index === 0) return true; // Mantieni sempre l'header
+                return row.some(cell => cell !== null && cell !== undefined && cell !== '');
+            });
+            
             if (type === 'ieri') {
-                fileIeriData = jsonData;
+                fileIeriData = filteredData;
             } else {
-                fileOggiData = jsonData;
+                fileOggiData = filteredData;
                 // Usa gli headers del file di oggi
-                headers = jsonData[0] || [];
+                headers = filteredData[0] || [];
             }
             
             if (fileIeriData && fileOggiData) {
@@ -431,18 +446,26 @@
         const mapIeri = new Map();
         const mapOggi = new Map();
 
-        // Salta la riga di intestazione (indice 0)
+        // Salta la riga di intestazione (indice 0) e processa solo righe con modello valido
         for (let i = 1; i < fileIeriData.length; i++) {
-            const modello = fileIeriData[i][1]; // Colonna B
-            if (modello) {
-                mapIeri.set(modello.toString().trim(), fileIeriData[i]);
+            const row = fileIeriData[i];
+            const modello = row[1]; // Colonna B (indice 1)
+            
+            // Verifica che il modello esista e non sia vuoto
+            if (modello && modello.toString().trim() !== '') {
+                const modelKey = modello.toString().trim();
+                mapIeri.set(modelKey, row);
             }
         }
 
         for (let i = 1; i < fileOggiData.length; i++) {
-            const modello = fileOggiData[i][1]; // Colonna B
-            if (modello) {
-                mapOggi.set(modello.toString().trim(), fileOggiData[i]);
+            const row = fileOggiData[i];
+            const modello = row[1]; // Colonna B (indice 1)
+            
+            // Verifica che il modello esista e non sia vuoto
+            if (modello && modello.toString().trim() !== '') {
+                const modelKey = modello.toString().trim();
+                mapOggi.set(modelKey, row);
             }
         }
 
@@ -450,12 +473,14 @@
         aggiuntiRows = [];
         rimossiRows = [];
 
+        // Modelli aggiunti: presenti in oggi ma non in ieri
         mapOggi.forEach((row, modello) => {
             if (!mapIeri.has(modello)) {
                 aggiuntiRows.push(row);
             }
         });
 
+        // Modelli rimossi: presenti in ieri ma non in oggi
         mapIeri.forEach((row, modello) => {
             if (!mapOggi.has(modello)) {
                 rimossiRows.push(row);
