@@ -402,11 +402,6 @@
             
             progress.style.display = 'block';
             bar.style.width = '0%';
-            
-            // Simula caricamento
-            setTimeout(() => bar.style.width = '30%', 50);
-            setTimeout(() => bar.style.width = '60%', 150);
-            setTimeout(() => bar.style.width = '90%', 300);
         }
 
         function hideProgress(type) {
@@ -425,33 +420,78 @@
 
         function readExcel(file, type) {
             const reader = new FileReader();
-            reader.onload = function(e) {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1, defval: ''});
-                
-                // Filtra le righe completamente vuote
-                const filteredData = jsonData.filter((row, index) => {
-                    if (index === 0) return true; // Mantieni sempre l'header
-                    return row.some(cell => cell !== null && cell !== undefined && cell !== '');
-                });
-                
-                if (type === 'ieri') {
-                    fileIeriData = filteredData;
-                } else {
-                    fileOggiData = filteredData;
-                    // Usa gli headers del file di oggi
-                    headers = filteredData[0] || [];
-                }
-                
-                // Nascondi barra di caricamento
-                hideProgress(type);
-                
-                if (fileIeriData && fileOggiData) {
-                    document.getElementById('compareBtn').disabled = false;
+            const barId = type === 'ieri' ? 'barIeri' : 'barOggi';
+            
+            reader.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 30;
+                    document.getElementById(barId).style.width = percentComplete + '%';
                 }
             };
+            
+            reader.onload = function(e) {
+                document.getElementById(barId).style.width = '40%';
+                
+                requestAnimationFrame(() => {
+                    const data = new Uint8Array(e.target.result);
+                    document.getElementById(barId).style.width = '50%';
+                    
+                    requestAnimationFrame(() => {
+                        // Opzioni ottimizzate per file grandi
+                        const workbook = XLSX.read(data, {
+                            type: 'array',
+                            cellDates: false,
+                            cellStyles: false,
+                            sheetRows: 0 // Leggi tutte le righe
+                        });
+                        
+                        document.getElementById(barId).style.width = '70%';
+                        
+                        requestAnimationFrame(() => {
+                            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                            
+                            // Usa raw: false per velocizzare
+                            const jsonData = XLSX.utils.sheet_to_json(firstSheet, {
+                                header: 1,
+                                defval: '',
+                                raw: false
+                            });
+                            
+                            document.getElementById(barId).style.width = '85%';
+                            
+                            requestAnimationFrame(() => {
+                                // Filtra le righe completamente vuote in modo più efficiente
+                                const filteredData = [];
+                                filteredData.push(jsonData[0]); // Header
+                                
+                                for (let i = 1; i < jsonData.length; i++) {
+                                    const row = jsonData[i];
+                                    // Controlla solo se la colonna B (indice 1) ha un valore
+                                    if (row[1] && row[1].toString().trim() !== '') {
+                                        filteredData.push(row);
+                                    }
+                                }
+                                
+                                document.getElementById(barId).style.width = '95%';
+                                
+                                if (type === 'ieri') {
+                                    fileIeriData = filteredData;
+                                } else {
+                                    fileOggiData = filteredData;
+                                    headers = filteredData[0] || [];
+                                }
+                                
+                                hideProgress(type);
+                                
+                                if (fileIeriData && fileOggiData) {
+                                    document.getElementById('compareBtn').disabled = false;
+                                }
+                            });
+                        });
+                    });
+                });
+            };
+            
             reader.readAsArrayBuffer(file);
         }
 
